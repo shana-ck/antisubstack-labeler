@@ -1,0 +1,24 @@
+{
+  "dependencies": {
+    "@skyware/bot": "^0.3.8",
+    "@skyware/jetstream": "^0.2.2",
+    "@skyware/labeler": "^0.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "pino": "^9.7.0",
+    "prom-client": "^15.1.3",
+    "tsx": "^4.19.2"
+  },
+  "name": "ss-labeler",
+  "version": "1.0.0",
+  "main": "labeler.ts",
+  "type": "module",
+  "scripts": {
+    "test": "tsx tester.ts",
+    "dev": "tsx labeler.ts",
+    "start": "tsx labeler.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
