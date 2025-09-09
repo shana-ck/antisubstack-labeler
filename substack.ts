@@ -6,13 +6,14 @@ const subCheck = async (url: string) => {
   const httpRegex4 = /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.retroist\.com(?:\/.*)?$/
   const httpRegex5 = /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.jphilll\.com(?:\/.*)?$/
   const regexArr = [httpRegex, httpRegex2, httpRegex3, httpRegex4, httpRegex5];
+  let found = false;
   regexArr.forEach(httpExp => {
     if (httpExp.test(url)) {
-      console.log('found', url);
-      return true;
+      found = true;
+      return found;
     }
   });
+  return found;
 };
 
 export default subCheck;
-

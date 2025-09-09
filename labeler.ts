@@ -69,9 +69,9 @@ jetstream.onCreate('app.bsky.feed.post', async evt => {
   const record = evt.commit.record;
   const uri = `at://${evt.did}/${evt.commit.collection}/${evt.commit.rkey}`;
   if (record.facets) {
-    const facets = record.facets;
-    for (const facet of facets) {
-      for (const feature of facet.features) {
+    let facets = record.facets;
+    for (let facet of facets) {
+      for (let feature of facet.features) {
         if (feature.$type === 'app.bsky.richtext.facet#link') {
           if (await subCheck(feature.uri)) {
             logger.info('found a substack!');
@@ -85,6 +85,7 @@ return;
         }
       }
     }
+facets = [];
   } 
  if (record.embed?.$type === 'app.bsky.embed.external') {
 	let link = record.embed.external.uri;
