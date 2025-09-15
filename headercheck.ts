@@ -1,26 +1,26 @@
 const headerCheck = async (url: string) => {
-const controller = new AbortController();
-const signal = controller.signal
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const resp = await fetch(url, {
-      method: 'HEAD',
-      signal
+      method: "HEAD",
+      signal: controller.signal,
     });
     const headers = Object.fromEntries(resp.headers.entries());
-    if (headers['x-served-by'] === 'Substack') {
+    if (headers["x-served-by"] === "Substack") {
       return true;
-    } else if (headers['x-sub'] === 'substack') {
+    } else if (headers["x-sub"] === "substack") {
       return true;
-    } else if (headers['content-security-policy'].includes('substack')) {
+    } else if (headers["content-security-policy"]?.includes("substack")) {
       return true;
     } else {
       return false;
     }
   } catch (err) {
-controller.abort()    
-return false;
+    return false;
+  } finally {
+    clearTimeout(timeout);
   }
 };
 
 export default headerCheck;
-
