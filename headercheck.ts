@@ -4,6 +4,10 @@ const headerCheck = async (url: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   const pool = new Agent({ connect: { keepAlive: false}})
+    let validate = /^((http|https|ftp):\/\/)/;
+  if (!validate.test(url)) {
+    url = "http://" + url
+  }
 
   try {
     const resp = await fetch(url, {
