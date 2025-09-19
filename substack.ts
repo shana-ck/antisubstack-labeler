@@ -1,6 +1,8 @@
 import UrlPattern from 'url-pattern';
 
 const subCheck = async (url: string) => {
+  // basic regex to check for substack domain on any link regardless of if it matches the path
+  const regexHttp = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.substack\.com(?:\/.*)?$/;
   // as far as I am aware, these are the patterns for paths for pages hosted on substack
   // there may be more which I will certainly add if I find them
   const pathsPattern = [
@@ -60,6 +62,10 @@ const subCheck = async (url: string) => {
   } else if (domainCheck) {
     // this literally just verifies that a valid link was found
     found = 2;
+    return found
+  } else if (regexHttp.test(url)) {
+    found = 1
+    return found
   }
   return found;
 };
