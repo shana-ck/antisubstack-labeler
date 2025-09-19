@@ -1,5 +1,5 @@
 import express from 'express';
-import { Registry, collectDefaultMetrics } from 'prom-client';
+import { Registry, collectDefaultMetrics, Gauge } from 'prom-client';
 import { writeHeapSnapshot} from 'node:v8';
 import logger from './logger.js';
 
@@ -8,6 +8,12 @@ collectDefaultMetrics({ register });
 register.setDefaultLabels({ app: "labeler", });
 const app = express();
 
+export const behind = new Gauge({ 
+  name: 'requests_behind',
+  help: 'Number of requests behind'
+});
+
+register.registerMetric(behind);
 app.get('/metrics', (req, res) => {
   register
     .metrics()

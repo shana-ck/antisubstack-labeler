@@ -6,7 +6,7 @@ import headerCheck from "./headercheck";
 import fs from "node:fs";
 import Database from "libsql";
 import logger from "./logger";
-import { startMetricsServer } from "./metrics";
+import { startMetricsServer, behind } from "./metrics";
 import NodeCache from "node-cache"
 
 const server = new LabelerServer({
@@ -23,15 +23,27 @@ let processed = 0;
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 120, maxKeys: 1000000})
 
 const domainFromURL=(url)=> {
+  try {
     const urlObj = new URL(url)
     const domain = urlObj.hostname
     const key = domain
+if (key != 'bit.ly' && 'tinyurl.com' && key !='tiny.cc' && key!='trib.al') {
     return key
+} else {
+return url
 }
+  } catch(err) {
+    if (err instanceof TypeError) { 
+ logger.error(err.message)
+}
+  return url
+}
+}
+
 
 const checkCache = (uri) => {
   try {
-   let key = domainFromURL(uri)
+   let key = domainFromURL(uri) || uri
   const cachedData = cache.get(key)
   if (cachedData) {
     console.log("cache hit", key, cachedData)
@@ -48,6 +60,7 @@ setInterval(() => {
   logger.info(
     `Processed ${processed} of ${received}, ${received - processed} behind`,
   );
+behind.set(received - processed);
 }, 30_000);
 
 
@@ -72,8 +85,26 @@ function epoch(date) {
   return Date.parse(date);
 }
 const ts = epoch(row.cts);
-cursor = ts;
+cursor = ts*1000;
 return cursor
+}
+
+const checkLinks = async (url: string) => {
+  let key = domainFromURL(url) || url
+  if (await subCheck(url) === 1) {
+    cache.set(key, true)
+    return true
+  } else if (await subCheck(url) === 2) {
+    let headers = await headerCheck(url)
+    if (headers) {
+      logger.info("header check")
+      cache.set(key, true)
+      return true
+    }
+  } else {
+    cache.set(key, false)
+    return false
+  }
 }
 
 server.app.listen({ port: port, host: "127.0.0.1" }, (error) => {
@@ -131,48 +162,28 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
                 await server.createLabel({ uri, val: "substack" });
                 return
               }
-            } else {
-            if (await subCheck(feature.uri)) {
-              let key = domainFromURL(feature.uri)
-              cache.set(key, true)
-              await server.createLabel({ uri, val: "substack" });
-              return;
-            } else if (await headerCheck(feature.uri)) {
-
-              let key = domainFromURL(feature.uri)
-              
-              cache.set(key, true)
-              await server.createLabel({ uri, val: "substack" });
-              return;
-            } else {
-              let key = domainFromURL(feature.uri)
-              cache.set(key, false)
+            } else if (await checkLinks(feature.uri)) {
+                await server.createLabel({ uri, val: "substack" });
             }
           }
         }
-        }
-      }
-    }
     if (record.embed?.$type === "app.bsky.embed.external") {
       let link = record.embed.external.uri;
-      if (await subCheck(link)) {
-        logger.info("embed");
-        let key = domainFromURL(link)
-        cache.set(key, true)
+      let key = checkCache(link)
+      if (key) {
+        let res = cache.get(key)
+        if (res===true) {
+          await server.createLabel({ uri, val: "substack" });
+          return
+        }
+      } else if (await checkLinks(link)) {
         await server.createLabel({ uri, val: "substack" });
-        return;
-      } else if (await headerCheck(link)) {
-        logger.info("embed");
-        let key = domainFromURL(link)
-        cache.set(key, true)
-        await server.createLabel({ uri, val: "substack" });
-        return;
-      } else {
-              let key = domainFromURL(link)
-              cache.set(key, false)
-
+        return
       }
+        return;
     }
+  }
+}
   } finally {
     processed++;
   }
