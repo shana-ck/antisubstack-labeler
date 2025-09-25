@@ -1,19 +1,25 @@
 import express from 'express';
-import { Registry, collectDefaultMetrics, Gauge } from 'prom-client';
-import { writeHeapSnapshot} from 'node:v8';
+import { Registry, collectDefaultMetrics, Gauge, Counter } from 'prom-client';
+import { writeHeapSnapshot } from 'node:v8';
 import logger from './logger.js';
 
 const register = new Registry();
 collectDefaultMetrics({ register });
-register.setDefaultLabels({ app: "labeler", });
+register.setDefaultLabels({ app: 'labeler' });
 const app = express();
 
-export const behind = new Gauge({ 
+export const behind = new Gauge({
   name: 'requests_behind',
   help: 'Number of requests behind'
 });
 
+export const restarts = new Counter({
+  name: 'jetstream_restarts',
+  help: 'Number of times Jetstream has restarted'
+});
+
 register.registerMetric(behind);
+register.registerMetric(restarts);
 app.get('/metrics', (req, res) => {
   register
     .metrics()
@@ -28,9 +34,9 @@ app.get('/metrics', (req, res) => {
 });
 
 app.get('/heap', (req, res) => {
-writeHeapSnapshot()
-res.send({message: "heap snapshot saved"})
-})
+  writeHeapSnapshot();
+  res.send({ message: 'heap snapshot saved' });
+});
 
 export const startMetricsServer = (port: number, host = '127.0.0.1') => {
   return app.listen(port, host, () => {

@@ -6,7 +6,7 @@ import headerCheck from "./headercheck";
 import fs from "node:fs";
 import Database from "libsql";
 import logger from "./logger";
-import { startMetricsServer, behind } from "./metrics";
+import { startMetricsServer, behind, restarts } from "./metrics";
 import NodeCache from "node-cache"
 
 const server = new LabelerServer({
@@ -136,6 +136,7 @@ jetstream.on("open", () => {
       process.exit(1);
     }
   }
+  restarts.inc()
   logger.info(
     `Connected to Jetstream with cursor ${cursor} (${epochUsToDateTime(cursor)})`,
   );
@@ -167,23 +168,25 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
             }
           }
         }
+}
+}
     if (record.embed?.$type === "app.bsky.embed.external") {
       let link = record.embed.external.uri;
       let key = checkCache(link)
       if (key) {
         let res = cache.get(key)
         if (res===true) {
+	  logger.info("embed")
           await server.createLabel({ uri, val: "substack" });
           return
         }
       } else if (await checkLinks(link)) {
+	logger.info("embed")
         await server.createLabel({ uri, val: "substack" });
         return
       }
         return;
     }
-  }
-}
   } finally {
     processed++;
   }

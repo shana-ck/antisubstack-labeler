@@ -18,9 +18,10 @@ const subCheck = async (url: string) => {
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/welcome(/)',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/sitemap.xml(/)',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/@*',
-  '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/pub*',
+  '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/pub(/)(*)',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/inbox*',
-  '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/subscribe'
+  '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/subscribe',
+'(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/profile(/)(*)'
 
 ];
 // these domains occasionally sneak past the labeler so they are hardcoded in for now
@@ -30,6 +31,7 @@ let sneaky = [
   'thebulwark.com',
   'jphilll.com',
   'retroist.com',
+'erininthemorning.com'
 ];
 let pattern = new UrlPattern('(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)(/)');
 let domainCheck = pattern.match(url);
