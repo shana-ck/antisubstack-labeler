@@ -4,7 +4,6 @@ import "dotenv/config";
 import subCheck from "./substack";
 import headerCheck from "./headercheck";
 import fs from "node:fs";
-import Database from "libsql";
 import logger from "./logger";
 import { startMetricsServer, behind, restarts } from "./metrics";
 import NodeCache from "node-cache"
@@ -22,12 +21,19 @@ let processed = 0;
 
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 120, maxKeys: 1000000})
 
+const shortened = ['bit.ly', 'ow.ly', 'tinyurl.com', 'tiny.cc', 'trib.al', 'dlvr.it', 'buff.ly', 'is.gd', 'snipurl.com', 'notlong.com', 'clck.ru', 'tiny.pl', 'vurl.com', 't.co']
+
+
 const domainFromURL=(url)=> {
+  let validate = /^((http|https|ftp):\/\/)/;
+  if (!validate.test(url)) {
+    url = "http://" + url
+  }
   try {
     const urlObj = new URL(url)
     const domain = urlObj.hostname
     const key = domain
-if (key != 'bit.ly' && 'tinyurl.com' && key !='tiny.cc' && key!='trib.al') {
+if (!shortened.includes(key)) {
     return key
 } else {
 return url
@@ -64,30 +70,33 @@ behind.set(received - processed);
 }, 30_000);
 
 
-const db = new Database("labels.db");
-const row = db
-  .prepare("SELECT * from labels WHERE id=(SELECT max(id) FROM labels)")
-  .get(1);
-function epoch(date) {
-  return Date.parse(date);
-}
-const ts = epoch(row.cts);
-cursor = ts * 1000;
+// const db = new Database("labels.db");
+// const row = db
+//  .prepare("SELECT * from labels WHERE id=(SELECT max(id) FROM labels)")
+//  .get(1);
+// function epoch(date) {
+//  return Date.parse(date);
+// }
+// const ts = epoch(row.cts);
+// cursor = ts * 1000;
+
 function epochUsToDateTime(cursor: number): string {
-  return new Date(cursor / 1000).toISOString();
+  return new Date(cursor).toISOString();
 }
 
-const dbCursor = () => {
-  const row = db
-  .prepare("SELECT * from labels WHERE id=(SELECT max(id) FROM labels)")
-  .get(1);
-function epoch(date) {
-  return Date.parse(date);
-}
-const ts = epoch(row.cts);
-cursor = ts*1000;
-return cursor
-}
+// const dbCursor = () => {
+//  const row = db
+//  .prepare("SELECT * from labels WHERE id=(SELECT max(id) FROM labels)")
+//  .get(1);
+
+// function epoch(date) {
+//  return Date.parse(date);
+// }
+
+// const ts = epoch(row.cts);
+// cursor = ts*1000;
+// return cursor
+// }
 
 const checkLinks = async (url: string) => {
   let key = domainFromURL(url) || url
@@ -112,6 +121,7 @@ server.app.listen({ port: port, host: "127.0.0.1" }, (error) => {
     console.error("Failed to start: ", error);
   } else {
     console.log(`Listening on port ${port}`);
+    restarts.inc()
   }
 });
 
@@ -128,7 +138,7 @@ jetstream.on("open", () => {
     logger.info(`Cursor found: ${cursor} (${epochUsToDateTime(cursor)})`);
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code === "ENOENT") {
-      cursor = ts;
+      cursor = Date.now() - 300;
       logger.info(`Cursor not found, setting to ${cursor}`);
       fs.writeFileSync("cursor.txt", cursor.toString(), "utf8");
     } else {
@@ -136,7 +146,6 @@ jetstream.on("open", () => {
       process.exit(1);
     }
   }
-  restarts.inc()
   logger.info(
     `Connected to Jetstream with cursor ${cursor} (${epochUsToDateTime(cursor)})`,
   );
@@ -193,7 +202,7 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
 });
 
 jetstream.on("close", () => {
-  cursor = Math.floor((Date.now() - 300 * 1000) * 1000);
+  cursor = Date.now() - 300
   console.log(
     `Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
@@ -202,18 +211,20 @@ jetstream.on("close", () => {
 
 jetstream.on("error", (err) => {
   logger.error(`Jetstream error: ${err.message}`);
-  cursor = dbCursor();
+//  cursor = dbCursor();
+    cursor = Date.now() - 300
   console.log(
     `Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
   fs.writeFileSync("cursor.txt", cursor.toString(), "utf8");
-jetstream.close()
-jetstream.start()
+jetstream.close();
+jetstream.start();
 });
 
 process.on("SIGINT", function () {
   try {
     jetstream.close();
+    server.close();
     metricsServer.close();
   } catch (err) {
     logger.error(`Error shutting down gracefully: ${err}`);
@@ -224,6 +235,7 @@ process.on("SIGINT", function () {
 process.on("SIGTERM", function () {
   try {
     jetstream.close();
+    server.close();
     metricsServer.close();
   } catch (err) {
     logger.error(`Error shutting down gracefully: ${err}`);
