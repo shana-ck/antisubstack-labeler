@@ -3,8 +3,8 @@ import UrlPattern from "url-pattern";
 const subCheck = async (url: string) => {
   // basic regex to check for substack domain that doesn't match paths
   const regexHttp = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.substack\.com(?:\/.*)?$/;
-// Temporary hard-coding while I fix the pattern for double-barreled TLDs
-  const regexCoUK = /^(https?:\/\/)?(www\.)?bearlypolitics\.co\.uk(?:\/.*)?$/;
+// Temporary hard-coding for The Bulwark link shortener
+  const regexBulwark = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.thebulwark\.com(?:\/.*)?$/;
 
   // as far as I am aware, these are the patterns for paths for pages hosted on substack
   // there may be more which I will certainly add if I find them
@@ -68,7 +68,7 @@ let found = 0
   } else if (regexHttp.test(url)) {
     found = 1;
     return found;
-} else if (regexCoUK.test(url)) {
+} else if (regexBulwark.test(url)) {
 found = 1;
 return found;
 }
