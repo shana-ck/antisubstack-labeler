@@ -21,6 +21,7 @@ const subCheck = async (url: string) => {
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/pub(/)(*)',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/inbox*',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/subscribe',
+    '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/blackfriday',
 '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/profile(/)(*)'
 
 ];
