@@ -1,2 +1,4 @@
 node_modules
-site
+**.db*
+labels.db
+tester.ts
