@@ -1,23 +1,29 @@
 import { LabelerServer } from "@skyware/labeler";
-import { CommitCreateEvent, CommitType, Jetstream } from "@skyware/jetstream";
+import { Jetstream } from "@skyware/jetstream";
 import "dotenv/config";
-import subCheck from "./substack";
-import headerCheck from "./headercheck";
-import expandUrl from "./expandurl";
+import subCheck from "./substack.ts";
+import headerCheck from "./headercheck.ts";
+import expandUrl from "./expandurl.ts";
 import fs from "node:fs";
-import logger from "./logger";
-import { startMetricsServer, behind, restarts } from "./metrics";
+import logger from "./logger.ts";
 import NodeCache from "node-cache";
-//import { DatabaseSync } from 'node:sqlite';
-// import { tall } from 'tall';
+import { startMetricsServer, behind, restarts, inflightReq, drainReq } from "./metrics.ts";
+// import { WebSocket } from "partysocket"
+
+// const options = {
+// connectionTimeout: 10000
+// }
 
 const wsEndpoints = ['wss://jetstream2.us-west.bsky.network/subscribe',' wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe',
  'wss://jetstream1.us-east.bsky.network/subscribe']
 
+let jsEndpoint = wsEndpoints[Math.floor(Math.random() * wsEndpoints.length)]
+// const ws = new WebSocket(jsEndpoint, [], options)
 
 const server = new LabelerServer({
   did: process.env.LABELER_DID,
   signingKey: process.env.SIGNING_KEY,
+  dbPath: "./data/labels.db"
 });
 
 const port = 14831;
@@ -27,6 +33,43 @@ let received = 0;
 let processed = 0;
 
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 120, maxKeys: 1000000})
+
+function createBackpressuredWriter(server: LabelerServer, maxConcurrent = 50) {
+  let inflight = 0;
+  let waiters = [];
+ 
+  async function drain() {
+    if (inflight < maxConcurrent)
+      return;
+    logger.info('DRAIN!!!!')
+    drainReq.inc()
+    await new Promise(resolve => waiters.push(resolve));
+  }
+  function release() {
+    inflight--;
+    if (waiters.length > 0) {
+      waiters.shift()();
+    }
+  }
+ 
+  return {
+    get inflight() {
+	inflightReq.set(inflight)
+      return inflight; 
+    },
+    async createLabel(opts) {
+      await drain();          // blocks here if too many in-flight
+      inflight++;
+      try {
+        return await server.createLabel(opts);
+      } finally {
+        release();
+      }
+    }
+  };
+}
+
+const writer = createBackpressuredWriter(server, 20)
 
 let short=false;
 const shortened = ['bit.ly', 'ow.ly', 'tinyurl.com', 'tiny.cc', 'trib.al', 'dlvr.it', 'is.gd', 'snipurl.com', 'notlong.com', 'clck.ru', 'tiny.pl', 'vurl.com', 't.co']
@@ -55,7 +98,7 @@ short = false;
 }
 }
 
-
+logger.info(jsEndpoint)
 const checkCache = (uri) => {
   try {
    let key = domainFromURL(uri) || uri
@@ -82,19 +125,6 @@ function epochUsToDateTime(cursor: number): string {
   return new Date(cursor).toISOString();
 }
 
-// const dbCursor = () => {
-//  const row = db
-//  .prepare("SELECT * from labels WHERE id=(SELECT max(id) FROM labels)")
-//  .get(1);
-
-// function epoch(date) {
-//  return Date.parse(date);
-// }
-
-// const ts = epoch(row.cts);
-// cursor = ts*1000;
-// return cursor
-// }
 
 const checkLinks = async (url: string) => {
   let key = domainFromURL(url) || url
@@ -119,7 +149,7 @@ const checkLinks = async (url: string) => {
   }
 }
 
-server.app.listen({ port: port, host: "127.0.0.1" }, (error) => {
+server.app.listen({ port: port, host: "0.0.0.0" }, (error) => {
   if (error) {
     console.error("Failed to start: ", error);
   } else {
@@ -129,7 +159,7 @@ server.app.listen({ port: port, host: "127.0.0.1" }, (error) => {
 });
 
 const jetstream = new Jetstream({
-  endpoint: "wss://jetstream1.us-east.bsky.network/subscribe",
+  endpoint: jsEndpoint,
   wantedCollections: ["app.bsky.feed.post"],
   cursor: cursor,
 });
@@ -137,13 +167,13 @@ const jetstream = new Jetstream({
 jetstream.on("open", () => {
   try {
     logger.info("Trying to read cursor from cursor.txt...");
-    cursor = Number(fs.readFileSync("cursor.txt", "utf8"));
+    cursor = Number(fs.readFileSync("./data/cursor.txt", "utf8"));
     logger.info(`Cursor found: ${cursor} (${epochUsToDateTime(cursor)})`);
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code === "ENOENT") {
-      cursor = Date.now() - 300;
+      cursor = Date.now() - 300000;
       logger.info(`Cursor not found, setting to ${cursor}`);
-      fs.writeFileSync("cursor.txt", cursor.toString(), "utf8");
+      fs.writeFileSync("./data/cursor.txt", cursor.toString(), "utf8");
     } else {
       logger.error(err);
       process.exit(1);
@@ -152,6 +182,7 @@ jetstream.on("open", () => {
   logger.info(
     `Connected to Jetstream with cursor ${cursor} (${epochUsToDateTime(cursor)})`,
   );
+
 });
 
 const metricsServer = startMetricsServer(14833);
@@ -172,11 +203,11 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
             if (key) {
               let res = cache.get(key)
               if (res===true) {
-                await server.createLabel({ uri, val: "substack" });
+                await writer.createLabel({ uri, val: "substack" });
                 return
               }
             } else if (await checkLinks(feature.uri)) {
-                await server.createLabel({ uri, val: "substack" });
+                await writer.createLabel({ uri, val: "substack" });
             }
           }
         }
@@ -189,12 +220,12 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
         let res = cache.get(key)
         if (res===true) {
 	  logger.info("embed")
-          await server.createLabel({ uri, val: "substack" });
+          await writer.createLabel({ uri, val: "substack" });
           return
         }
       } else if (await checkLinks(link)) {
 	logger.info("embed")
-        await server.createLabel({ uri, val: "substack" });
+        await writer.createLabel({ uri, val: "substack" });
         return
       }
         return;
@@ -205,21 +236,23 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
 });
 
 jetstream.on("close", () => {
-  cursor = Date.now() - 300
+  cursor = Date.now() - 300000
   console.log(
-    `Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
+    `Jetstream closed. Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
-  fs.writeFileSync("cursor.txt", cursor.toString(), "utf8");
+  fs.writeFileSync("./data/cursor.txt", cursor.toString(), "utf8");
 });
 
 jetstream.on("error", (err) => {
-  logger.error(`Jetstream error: ${err.message}`);
+  logger.error(`Jetstream error: ${err}`);
+logger.error(err.message)
+console.log(err)
 //  cursor = dbCursor();
-    cursor = Date.now() - 300
+    cursor = Date.now() - 300000
   console.log(
     `Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
-  fs.writeFileSync("cursor.txt", cursor.toString(), "utf8");
+  fs.writeFileSync("./data/cursor.txt", cursor.toString(), "utf8");
 if (err.message == "TIMEOUT") {
 let endpoint = wsEndpoints[Math.floor(Math.random() * wsEndpoints.length)]
     logger.info(endpoint)
@@ -227,6 +260,7 @@ let endpoint = wsEndpoints[Math.floor(Math.random() * wsEndpoints.length)]
 }
 jetstream.close();
 jetstream.start();
+restarts.inc()
 });
 
 process.on("SIGINT", function () {

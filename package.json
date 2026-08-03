@@ -3,7 +3,7 @@
     "@skyware/bot": "^0.3.12",
     "@skyware/jetstream": "^0.2.5",
     "@skyware/labeler": "^0.2.0",
-    "bun": "~1.0.36",
+    "bun": "^1.0.3",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "node-cache": "^5.1.2",
