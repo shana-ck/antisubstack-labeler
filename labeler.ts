@@ -8,17 +8,17 @@ import fs from "node:fs";
 import logger from "./logger.ts";
 import NodeCache from "node-cache";
 import { startMetricsServer, behind, restarts, inflightReq, drainReq } from "./metrics.ts";
-// import { WebSocket } from "partysocket"
+import { WebSocket } from "partysocket"
 
-// const options = {
-// connectionTimeout: 10000
-// }
+const options = {
+connectionTimeout: 10000
+}
 
 const wsEndpoints = ['wss://jetstream2.us-west.bsky.network/subscribe',' wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe',
  'wss://jetstream1.us-east.bsky.network/subscribe']
 
 let jsEndpoint = wsEndpoints[Math.floor(Math.random() * wsEndpoints.length)]
-// const ws = new WebSocket(jsEndpoint, [], options)
+const ws = new WebSocket(jsEndpoint, [], options)
 
 const server = new LabelerServer({
   did: process.env.LABELER_DID,
@@ -104,12 +104,12 @@ const checkCache = (uri) => {
    let key = domainFromURL(uri) || uri
   const cachedData = cache.get(key)
   if (cachedData) {
-    console.log("cache hit", key, cachedData)
+    logger.info("cache hit", key, cachedData)
     return key
   }
   return false
   } catch(err) {
-    console.log(err)
+    logger.info(err)
     return false
   }
 }
@@ -151,9 +151,9 @@ const checkLinks = async (url: string) => {
 
 server.app.listen({ port: port, host: "0.0.0.0" }, (error) => {
   if (error) {
-    console.error("Failed to start: ", error);
+    logger.error("Failed to start: ", error);
   } else {
-    console.log(`Listening on port ${port}`);
+    logger.info(`Listening on port ${port}`);
     restarts.inc()
   }
 });
@@ -237,7 +237,7 @@ jetstream.onCreate("app.bsky.feed.post", async (evt) => {
 
 jetstream.on("close", () => {
   cursor = Date.now() - 300000
-  console.log(
+  logger.info(
     `Jetstream closed. Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
   fs.writeFileSync("./data/cursor.txt", cursor.toString(), "utf8");
@@ -246,10 +246,10 @@ jetstream.on("close", () => {
 jetstream.on("error", (err) => {
   logger.error(`Jetstream error: ${err}`);
 logger.error(err.message)
-console.log(err)
+// console.log(err)
 //  cursor = dbCursor();
     cursor = Date.now() - 300000
-  console.log(
+  logger.info(
     `Cursor updating, setting to ${cursor} (${epochUsToDateTime(cursor)})`,
   );
   fs.writeFileSync("./data/cursor.txt", cursor.toString(), "utf8");
@@ -259,7 +259,7 @@ let endpoint = wsEndpoints[Math.floor(Math.random() * wsEndpoints.length)]
     jetstream.url.href = endpoint
 }
 jetstream.close();
-jetstream.start();
+setTimeout(() => { jetstream.start()}, 5000);
 restarts.inc()
 });
 
@@ -283,4 +283,14 @@ process.on("SIGTERM", function () {
     logger.error(`Error shutting down gracefully: ${err}`);
     process.exit(1);
   }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Application specific logging, throwing an error, or other logic here
+});
+
+process.on('uncaughtException', (err) => {
+    logger.error('There was an uncaught error', err);
+    process.exit(1); // mandatory retry or exit code
 });

@@ -1,7 +1,7 @@
 import express from 'express';
 import { Registry, collectDefaultMetrics, Gauge, Counter } from 'prom-client';
 import { writeHeapSnapshot} from 'node:v8';
-import logger from './logger.ts';
+import logger from './logger.js';
 
 const register = new Registry();
 collectDefaultMetrics({ register });
@@ -18,20 +18,8 @@ name: 'jetstream_restarts',
 help: 'Number of times Jetstream has restarted'
 });
 
-export const drainReq = new Counter({
-	name: 'drain',
-	help: 'Number of times called drain'
-})
-export const inflightReq = new Gauge({
-  name: 'inflight',
-  help: 'Number of inflight requests'
-})
-
 register.registerMetric(behind);
 register.registerMetric(restarts);
-register.registerMetric(drainReq)
-register.registerMetric(inflightReq)
-
 app.get('/metrics', (req, res) => {
   register
     .metrics()
@@ -50,8 +38,8 @@ writeHeapSnapshot()
 res.send({message: "heap snapshot saved"})
 })
 
-export const startMetricsServer = (port: number) => {
-  return app.listen(port, () => {
-    logger.info(`Metrics server is listening on ${port}`);
+export const startMetricsServer = (port: number, host = '127.0.0.1') => {
+  return app.listen(port, host, () => {
+    logger.info(`Metrics server is listening on ${host}:${port}`);
   });
 };

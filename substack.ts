@@ -3,8 +3,8 @@ import UrlPattern from "url-pattern";
 const subCheck = async (url: string) => {
   // basic regex to check for substack domain that doesn't match paths
   const regexHttp = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.substack\.com(?:\/.*)?$/;
-// Temporary hard-coding for The Bulwark's link shortening
-  const regexBulwark = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.thebulwark\.com(?:\/.*)?$/;
+// Temporary hard-coding while I fix the pattern for double-barreled TLDs
+  const regexCoUK = /^(https?:\/\/)?(www\.)?bearlypolitics\.co\.uk(?:\/.*)?$/;
 
   // as far as I am aware, these are the patterns for paths for pages hosted on substack
   // there may be more which I will certainly add if I find them
@@ -22,8 +22,7 @@ const subCheck = async (url: string) => {
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/inbox*',
   '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/subscribe',
 '(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/blackfriday',
-'(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/profile(/)(*)',
-'(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/home/post/p(*)'
+'(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)/profile(/)(*)'
 
 ];
 // these domains occasionally sneak past the labeler so they are hardcoded in for now
@@ -33,8 +32,7 @@ let sneaky = [
   'thebulwark.com',
   'jphilll.com',
   'retroist.com',
-'erininthemorning.com',
-'thebignewsletter.com'
+'erininthemorning.com'
 ];
 let pattern = new UrlPattern('(http(s)\\://)(:subdomain.):domain.:tld(.:tld2)(/)');
 let domainCheck = pattern.match(url);
@@ -54,7 +52,6 @@ let found = 0
     }
   }
   if (domainCheck && domainCheck['domain'] == 'substack') {
-    console.log('substack domain');
     found = 1
     return found
   } else if (
@@ -70,7 +67,7 @@ let found = 0
   } else if (regexHttp.test(url)) {
     found = 1;
     return found;
-} else if (regexBulwark.test(url)) {
+} else if (regexCoUK.test(url)) {
 found = 1;
 return found;
 }
